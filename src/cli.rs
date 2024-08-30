@@ -1,26 +1,20 @@
 use crate::utils::{
-    console::{confirm, prompt, prompt_with_default},
+    console::{prompt, prompt_with_default},
     default_values::{
         DEFAULT_RECURSION_CIRCUITS_SET_VK_HASH, DEFAULT_RECURSION_LEAF_VK_HASH,
         DEFAULT_RECURSION_NODE_VK_HASH, DEFAULT_RECURSION_SCHEDULER_VK_HASH, DEFAULT_VERSION_PATCH,
     },
-    queries::{
-        get_basic_witness_job_status, get_compressor_job_status, get_prover_protocol_version,
-        insert_prover_protocol_version, insert_witness_inputs, restart_batch_proof,
-    },
+    queries::{get_prover_protocol_version, insert_prover_protocol_version, insert_witness_inputs},
     types::GetBatchResponse,
 };
 use clap::Parser;
-use serde::{Deserialize, Serialize};
 use spinoff::{spinners::Dots, Color, Spinner};
 use sqlx::{pool::PoolConnection, Postgres};
-use std::{path::PathBuf, str::FromStr};
+use std::str::FromStr;
 use zksync_ethers_rs::types::{
     zksync::{
-        inputs::WitnessInputData,
-        protocol_version::{ProtocolSemanticVersion, VersionPatch},
-        prover_dal::ProofCompressionJobStatus,
-        L1BatchNumber, ProtocolVersionId,
+        inputs::WitnessInputData, protocol_version::ProtocolSemanticVersion, L1BatchNumber,
+        ProtocolVersionId,
     },
     Bytes, TryFromPrimitive,
 };
@@ -120,7 +114,7 @@ fn write_batch_witness_input_data(
     witness_inputs_blob_url: &str,
 ) -> eyre::Result<()> {
     let mut spinner = Spinner::new(Dots, "Writing batch witness input data", Color::Blue);
-    match std::fs::write(witness_inputs_blob_url, &batch_witness_input_data_bytes) {
+    match std::fs::write(witness_inputs_blob_url, batch_witness_input_data_bytes) {
         Ok(_) => {
             spinner.success("Batch witness input data written.");
             Ok(())

@@ -1,13 +1,10 @@
-use eyre::ContextCompat;
 use sqlx::{pool::PoolConnection, Executor, Postgres, Row};
-use std::str::FromStr;
 use zksync_ethers_rs::{
     abi::Hash,
     types::{
         zksync::{
             basic_fri_types::AggregationRound,
             protocol_version::{ProtocolSemanticVersion, VersionPatch},
-            prover_dal::{ProofCompressionJobStatus, WitnessJobStatus},
             L1BatchNumber, ProtocolVersionId,
         },
         TryFromPrimitive,
@@ -41,25 +38,6 @@ pub async fn insert_witness_inputs(
     );
     prover_db.execute(query.as_str()).await?;
     Ok(())
-}
-
-pub async fn get_basic_witness_job_status(
-    l1_batch_number: L1BatchNumber,
-    prover_db: &mut PoolConnection<Postgres>,
-) -> eyre::Result<Option<WitnessJobStatus>> {
-    let query = format!(
-        "
-        SELECT status
-        FROM witness_inputs_fri
-        WHERE
-            l1_batch_number = {}
-        ",
-        l1_batch_number.0,
-    );
-    Ok(prover_db.fetch_optional(query.as_str()).await?.map(|row| {
-        let raw_status: String = row.get("status");
-        WitnessJobStatus::from_str(raw_status.as_str()).unwrap()
-    }))
 }
 
 pub async fn insert_prover_protocol_version(
@@ -105,17 +83,15 @@ pub async fn insert_prover_protocol_version(
 pub async fn get_prover_protocol_version(
     prover_db: &mut PoolConnection<Postgres>,
 ) -> eyre::Result<Option<ProtocolSemanticVersion>> {
-    let query = format!(
-        "
+    let query = "
         SELECT
             id,
             protocol_version_patch
         FROM prover_fri_protocol_versions
         ORDER BY created_at DESC
         LIMIT 1
-        "
-    );
-    let row = prover_db.fetch_optional(query.as_str()).await?;
+        ";
+    let row = prover_db.fetch_optional(query).await?;
     Ok(row.map(|r| {
         let protocol_version: i32 = r.get("id");
         let protocol_version_patch: i32 = r.get("protocol_version_patch");
@@ -133,14 +109,4 @@ pub async fn get_prover_protocol_version(
             ),
         )
     }))
-}
-
-fn input_table_name_for(aggregation_round: AggregationRound) -> &'static str {
-    match aggregation_round {
-        AggregationRound::BasicCircuits => "witness_inputs_fri",
-        AggregationRound::LeafAggregation => "leaf_aggregation_witness_jobs_fri",
-        AggregationRound::NodeAggregation => "node_aggregation_witness_jobs_fri",
-        AggregationRound::RecursionTip => "recursion_tip_witness_jobs_fri",
-        AggregationRound::Scheduler => "scheduler_witness_jobs_fri",
-    }
 }
