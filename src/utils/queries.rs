@@ -3,7 +3,6 @@ use zksync_ethers_rs::{
     abi::Hash,
     types::{
         zksync::{
-            basic_fri_types::AggregationRound,
             protocol_version::{ProtocolSemanticVersion, VersionPatch},
             L1BatchNumber, ProtocolVersionId,
         },
