@@ -11,6 +11,8 @@ use base64::prelude::*;
 use clap::Parser;
 use spinoff::{spinners::Dots, Color, Spinner};
 use sqlx::{pool::PoolConnection, Postgres};
+use std::fs::File;
+use std::{io::Write, str::FromStr};
 use zksync_ethers_rs::types::{
     zksync::{
         inputs::WitnessInputData, protocol_version::ProtocolSemanticVersion, L1BatchNumber,
@@ -65,7 +67,14 @@ impl Command {
                     protocol_version,
                     &mut prover_db,
                 )
-                .await?
+                .await?;
+                let request_info = GetBatchInfo {
+                    request_id: batch_data_response.request_id,
+                    batch_number: batch_witness_input_data.vm_run_data.l1_batch_number,
+                };
+                let mut batch_data_file = File::create("batch_data.json")?;
+                batch_data_file.write_all(serde_json::to_string(&request_info)?.as_bytes())?;
+                Ok(())
             }
             Command::SubmitFinalProof => {
                 let participant_id: String = prompt("Insert your participant ID")?;
