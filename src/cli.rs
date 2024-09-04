@@ -74,7 +74,6 @@ impl Command {
                 };
                 let mut batch_data_file = File::create("batch_data.json")?;
                 batch_data_file.write_all(serde_json::to_string(&request_info)?.as_bytes())?;
-                Ok(())
             }
             Command::SubmitFinalProof => {
                 let participant_id: String = prompt("Insert your participant ID")?;
@@ -99,9 +98,9 @@ impl Command {
                     deployment_version,
                 };
                 submit_proof(&participant_id, &server_url, &submit_proof_request).await?;
-                Ok(())
             }
         }
+        Ok(())
     }
 }
 
@@ -136,10 +135,11 @@ async fn submit_proof(
             "Proof submission failed: {:?}",
             submit_proof_response.text().await
         ));
+        Err(eyre::eyre!("Proof submission failed"))
     } else {
         spinner.success(&format!("Proof submitted: {submit_proof_response:?}"));
+        Ok(())
     }
-    Ok(())
 }
 
 async fn download_batch_witness_input_data(
