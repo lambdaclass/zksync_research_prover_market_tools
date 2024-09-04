@@ -5,12 +5,12 @@ use crate::utils::{
         DEFAULT_RECURSION_NODE_VK_HASH, DEFAULT_RECURSION_SCHEDULER_VK_HASH, DEFAULT_VERSION_PATCH,
     },
     queries::{get_prover_protocol_version, insert_prover_protocol_version, insert_witness_inputs},
-    types::GetBatchResponse,
+    types::{GetBatchResponse, PostSubmitProofRequest, GetBatchInfo},
 };
+use base64::prelude::*;
 use clap::Parser;
 use spinoff::{spinners::Dots, Color, Spinner};
 use sqlx::{pool::PoolConnection, Postgres};
-use std::str::FromStr;
 use zksync_ethers_rs::types::{
     zksync::{
         inputs::WitnessInputData, protocol_version::ProtocolSemanticVersion, L1BatchNumber,
@@ -18,7 +18,6 @@ use zksync_ethers_rs::types::{
     },
     Bytes, TryFromPrimitive,
 };
-
 pub const VERSION_STRING: &str = env!("CARGO_PKG_VERSION");
 
 #[derive(Parser)]
@@ -26,6 +25,8 @@ pub const VERSION_STRING: &str = env!("CARGO_PKG_VERSION");
 pub enum Command {
     #[clap(about = "Inserts witness inputs into the prover's database.", visible_aliases = ["insert-witness", "insert-witness-inputs"])]
     InsertNextBatchWitnessInputs,
+    #[clap(about = "Submit final proof.", visible_aliases = ["submit-proof", "submit-final-proof"])]
+    SubmitFinalProof,
 }
 
 impl Command {
@@ -66,8 +67,32 @@ impl Command {
                 )
                 .await?
             }
-        };
-        Ok(())
+            Command::SubmitFinalProof => {
+                let participant_id: String = prompt("Insert your participant ID")?;
+                let request_id: u32 =
+                    prompt("Insert the request ID from the batch_data.json file")?;
+                let server_url: String = prompt("Insert the server URL")?;
+
+                let proof_file_path: String = prompt("Insert the path to the proof file")?;
+                let proof_base64 = BASE64_STANDARD.encode(std::fs::read(proof_file_path)?);
+
+                let proving_time: u64 = prompt("Insert the proving time (ms)")?;
+                let cost: u64 = prompt("Insert the cost (cents)")?;
+                let price: u64 = prompt("Insert the price (cents)")?;
+                let deployment_version: String =
+                    prompt("Insert the deployment version (eg: <prover-release>-<GPU/CPU>")?;
+                let submit_proof_request = PostSubmitProofRequest {
+                    request_id,
+                    proof_data: proof_base64,
+                    proving_time,
+                    cost,
+                    price,
+                    deployment_version,
+                };
+                submit_proof(&participant_id, &server_url, &submit_proof_request).await?;
+                Ok(())
+            }
+        }
     }
 }
 
@@ -83,6 +108,29 @@ async fn get_batch_data_from_server(
         .await?;
     spinner.success(&format!("Batch data received: {batch_response:?}"));
     Ok(batch_response)
+}
+
+async fn submit_proof(
+    participant_id: &str,
+    server_url: &str,
+    submit_proof_request: &PostSubmitProofRequest,
+) -> eyre::Result<()> {
+    let mut spinner = Spinner::new(Dots, "Submitting proof", Color::Blue);
+    let submit_proof_url = format!("{server_url}/submit_proof/?participant_id={participant_id}");
+    let submit_proof_response = reqwest::Client::new()
+        .post(&submit_proof_url)
+        .json(&serde_json::json!(submit_proof_request))
+        .send()
+        .await?;
+    if submit_proof_response.status() != 200 {
+        spinner.fail(&format!(
+            "Proof submission failed: {:?}",
+            submit_proof_response.text().await
+        ));
+    } else {
+        spinner.success(&format!("Proof submitted: {submit_proof_response:?}"));
+    }
+    Ok(())
 }
 
 async fn download_batch_witness_input_data(
